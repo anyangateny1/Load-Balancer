@@ -1,7 +1,8 @@
 package backendserver_test
 
 import (
-	backendserver "load-balancer/internal/backend_server"
+	"fmt"
+	"load-balancer/internal/backendserver"
 	"net"
 	"strings"
 	"sync"
@@ -44,7 +45,7 @@ func TestHandlingConnection(t *testing.T) {
 	}
 
 	response := string(buf[:n])
-	expected := "ACK: HELLO\n"
+	expected := "Server 1 ACK: HELLO\n"
 	if response != expected {
 		t.Fatalf("unexpected response: %s", response)
 	}
@@ -94,7 +95,7 @@ func TestMultipleConnections(t *testing.T) {
 			}
 
 			response := string(buf[:n])
-			expected := fmt.Sprintf("ACK: %s", strings.ToUpper(msg))
+			expected := fmt.Sprintf("Server 1 ACK: %s", strings.ToUpper(msg))
 			if response != expected {
 				t.Errorf("connection %d unexpected response: %q, want %q", connID, response, expected)
 			}

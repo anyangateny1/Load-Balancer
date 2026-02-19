@@ -56,7 +56,7 @@ func (b *BackendServer) handleConnection(conn net.Conn) {
 	}
 
 	ackMsg := strings.ToUpper(strings.TrimSpace(message))
-	response := fmt.Sprintf("ACK: %s\n", ackMsg)
+	response := fmt.Sprintf("Server %d ACK: %s\n", b.serverNumber, ackMsg)
 	_, err = conn.Write([]byte(response))
 	if err != nil {
 		b.logger.Error("Server Write Error", "error", err, "server", b.serverNumber)

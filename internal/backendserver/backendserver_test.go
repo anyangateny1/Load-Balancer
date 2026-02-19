@@ -10,30 +10,31 @@ import (
 	"time"
 )
 
-func TestHandlingConnection(t *testing.T) {
-	server, err := backendserver.NewBackendServer(1)
+func startServer(t *testing.T, id int) *backendserver.BackendServer {
+	t.Helper()
 
+	server, err := backendserver.NewBackendServer(id)
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
 	}
 
 	go server.AcceptConnections()
-	defer func() { _ = server.Close() }()
+	t.Cleanup(func() { _ = server.Close() })
 
 	time.Sleep(100 * time.Millisecond)
+	return server
+}
 
-	addr := server.Addr()
-	network_type := addr.Network()
+func sendMessage(t *testing.T, addr net.Addr, msg string) string {
+	t.Helper()
 
-	conn, err := net.Dial(network_type, addr.String())
+	conn, err := net.Dial(addr.Network(), addr.String())
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
-	defer func() {
-		_ = conn.Close()
-	}()
+	defer func() { _ = conn.Close() }()
 
-	_, err = conn.Write([]byte("Hello\n"))
+	_, err = conn.Write([]byte(msg))
 	if err != nil {
 		t.Fatalf("failed to write: %v", err)
 	}
@@ -44,26 +45,21 @@ func TestHandlingConnection(t *testing.T) {
 		t.Fatalf("failed to read: %v", err)
 	}
 
-	response := string(buf[:n])
+	return string(buf[:n])
+}
+
+func TestHandlingConnection(t *testing.T) {
+	server := startServer(t, 1)
+
+	response := sendMessage(t, server.Addr(), "Hello\n")
 	expected := "Server 1 ACK: HELLO\n"
 	if response != expected {
-		t.Fatalf("unexpected response: %s", response)
+		t.Fatalf("unexpected response: %q, want %q", response, expected)
 	}
 }
 
 func TestMultipleConnections(t *testing.T) {
-	server, err := backendserver.NewBackendServer(1)
-	if err != nil {
-		t.Fatalf("failed to listen: %v", err)
-	}
-
-	go server.AcceptConnections()
-	defer func() { _ = server.Close() }()
-
-	time.Sleep(100 * time.Millisecond)
-
-	addr := server.Addr()
-	networkType := addr.Network()
+	server := startServer(t, 1)
 
 	numConnections := 5
 	var wg sync.WaitGroup
@@ -73,28 +69,8 @@ func TestMultipleConnections(t *testing.T) {
 		go func(connID int) {
 			defer wg.Done()
 
-			conn, err := net.Dial(networkType, addr.String())
-			if err != nil {
-				t.Errorf("connection %d failed: %v", connID, err)
-				return
-			}
-			defer func() { _ = server.Close() }()
-
 			msg := fmt.Sprintf("Hello from connection %d\n", connID)
-			_, err = conn.Write([]byte(msg))
-			if err != nil {
-				t.Errorf("connection %d failed to write: %v", connID, err)
-				return
-			}
-
-			buf := make([]byte, 1024)
-			n, err := conn.Read(buf)
-			if err != nil {
-				t.Errorf("connection %d failed to read: %v", connID, err)
-				return
-			}
-
-			response := string(buf[:n])
+			response := sendMessage(t, server.Addr(), msg)
 			expected := fmt.Sprintf("Server 1 ACK: %s", strings.ToUpper(msg))
 			if response != expected {
 				t.Errorf("connection %d unexpected response: %q, want %q", connID, response, expected)

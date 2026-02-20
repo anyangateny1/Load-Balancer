@@ -2,7 +2,7 @@ package backendserver_test
 
 import (
 	"fmt"
-	"load-balancer/internal/backendserver"
+	"github.com/anyangateny1/Load-Balancer/internal/backendserver"
 	"net"
 	"strings"
 	"sync"

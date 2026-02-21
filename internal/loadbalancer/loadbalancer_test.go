@@ -49,10 +49,10 @@ func sendMessage(t *testing.T, addr net.Addr, msg string) string {
 
 func TestPacketForwarding(t *testing.T) {
 
-	lb := startLoadBalancer(t, 1)
+	lb := startLoadBalancer(t, 1000)
 
 	response := sendMessage(t, lb.Addr(), "Hello\n")
-	expected := "Server 1 ACK: HELLO\n"
+	expected := "Server 0 ACK: HELLO\n"
 
 	if response != expected {
 		t.Fatalf("unexpected response: %q, want %q", response, expected)

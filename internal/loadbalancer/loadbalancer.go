@@ -2,22 +2,23 @@ package loadbalancer
 
 import (
 	"errors"
-	"github.com/anyangateny1/Load-Balancer/internal/backendserver"
 	"io"
 	"log/slog"
 	"net"
-	"sync/atomic"
 	"time"
+
+	"github.com/anyangateny1/Load-Balancer/internal/algorithm"
+	"github.com/anyangateny1/Load-Balancer/internal/backendserver"
 )
 
 type LoadBalancer struct {
+	algo     algorithm.Algorithm
 	backend  []*backendserver.BackendServer
 	logger   *slog.Logger
 	listener net.Listener
-	next     uint32
 }
 
-func NewLoadBalancer(numOfServers int) (*LoadBalancer, error) {
+func NewLoadBalancer(numOfServers int, algo algorithm.Algorithm) (*LoadBalancer, error) {
 
 	const MaxServers = 1000
 	if numOfServers == 0 || numOfServers > MaxServers {
@@ -71,6 +72,7 @@ func NewLoadBalancer(numOfServers int) (*LoadBalancer, error) {
 	}
 
 	return &LoadBalancer{
+		algo:     algo,
 		backend:  servers,
 		logger:   slog,
 		listener: ln,
@@ -94,13 +96,12 @@ func (lb *LoadBalancer) AcceptConnections() {
 }
 
 func (lb *LoadBalancer) pipeConnections(clientConn net.Conn) {
-	index := atomic.LoadUint32(&lb.next)
-	backendAddr := lb.backend[int(index)%len(lb.backend)].Addr()
-	atomic.AddUint32(&lb.next, 1)
+	index := lb.algo.Next(len(lb.backend))
+	backendAddr := lb.backend[index].Addr()
 
 	backendConn, err := net.Dial(backendAddr.Network(), backendAddr.String())
 	if err != nil {
-		lb.logger.Error("Failed to connect to backend:", "error", err, "server", lb.next)
+		lb.logger.Error("Failed to connect to backend:", "error", err, "server", index)
 		clientConn.Close()
 		return
 	}

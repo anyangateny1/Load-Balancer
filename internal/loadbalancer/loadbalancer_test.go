@@ -2,18 +2,17 @@ package loadbalancer_test
 
 import (
 	"fmt"
-	"github.com/anyangateny1/Load-Balancer/internal/loadbalancer"
 	"net"
-	// "strings"
-	// "sync"
 	"testing"
-	// "time"
+
+	"github.com/anyangateny1/Load-Balancer/internal/algorithm"
+	"github.com/anyangateny1/Load-Balancer/internal/loadbalancer"
 )
 
-func startLoadBalancer(t *testing.T, num_of_servers int) *loadbalancer.LoadBalancer {
+func startLoadBalancer(t *testing.T, num_of_servers int, algo algorithm.Algorithm) *loadbalancer.LoadBalancer {
 	t.Helper()
 
-	lb, err := loadbalancer.NewLoadBalancer(num_of_servers)
+	lb, err := loadbalancer.NewLoadBalancer(num_of_servers, algo)
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
 	}
@@ -49,7 +48,7 @@ func sendMessage(t *testing.T, addr net.Addr, msg string) string {
 
 func TestPacketForwarding(t *testing.T) {
 
-	lb := startLoadBalancer(t, 10)
+	lb := startLoadBalancer(t, 10, &algorithm.RoundRobin{})
 
 	response := sendMessage(t, lb.Addr(), "Hello\n")
 	expected := "Server 0 ACK: HELLO\n"
@@ -62,7 +61,7 @@ func TestPacketForwarding(t *testing.T) {
 func TestRoundRobin(t *testing.T) {
 
 	const numOfServers = 10
-	lb := startLoadBalancer(t, numOfServers)
+	lb := startLoadBalancer(t, numOfServers, &algorithm.RoundRobin{})
 
 	for i := 0; i < numOfServers; i++ {
 		response := sendMessage(t, lb.Addr(), "HELLO\n")

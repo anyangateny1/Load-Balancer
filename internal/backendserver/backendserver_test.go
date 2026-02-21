@@ -140,16 +140,16 @@ func TestMixedClientSpeeds_FastFinishesFirst(t *testing.T) {
 			t.Errorf("slow dial error: %v", err)
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		fragments := []string{"H", "ello ", "World", "\n"}
 		for _, part := range fragments {
-			conn.Write([]byte(part))
+			_, _ = conn.Write([]byte(part))
 			time.Sleep(100 * time.Millisecond) // very slow sender
 		}
 
 		buf := make([]byte, 1024)
-		conn.Read(buf) // ignore result; slow client is just pressure
+		_, _ = conn.Read(buf)
 	}()
 
 	go func() {
@@ -162,10 +162,10 @@ func TestMixedClientSpeeds_FastFinishesFirst(t *testing.T) {
 			t.Errorf("fast dial error: %v", err)
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		msg := "FAST\n"
-		conn.Write([]byte(msg))
+		_, _ = conn.Write([]byte(msg))
 
 		buf := make([]byte, 1024)
 		_, err = conn.Read(buf)

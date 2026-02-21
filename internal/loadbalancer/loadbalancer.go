@@ -102,20 +102,20 @@ func (lb *LoadBalancer) pipeConnections(clientConn net.Conn) {
 	backendConn, err := net.Dial(backendAddr.Network(), backendAddr.String())
 	if err != nil {
 		lb.logger.Error("Failed to connect to backend:", "error", err, "server", index)
-		clientConn.Close()
+		_ = clientConn.Close()
 		return
 	}
 
 	go func() {
-		defer backendConn.Close()
-		defer clientConn.Close()
-		io.Copy(backendConn, clientConn)
+		defer func() { _ = backendConn.Close() }()
+		defer func() { _ = clientConn.Close() }()
+		_, _ = io.Copy(backendConn, clientConn)
 	}()
 
 	go func() {
-		defer backendConn.Close()
-		defer clientConn.Close()
-		io.Copy(clientConn, backendConn)
+		defer func() { _ = backendConn.Close() }()
+		defer func() { _ = clientConn.Close() }()
+		_, _ = io.Copy(clientConn, backendConn)
 	}()
 }
 

@@ -2,12 +2,13 @@ package backendserver_test
 
 import (
 	"fmt"
-	"github.com/anyangateny1/Load-Balancer/internal/backendserver"
 	"net"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/anyangateny1/Load-Balancer/internal/backendserver"
 )
 
 func startServer(t *testing.T, id int) *backendserver.BackendServer {

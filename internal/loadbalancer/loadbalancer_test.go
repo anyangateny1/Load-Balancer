@@ -1,7 +1,7 @@
 package loadbalancer_test
 
 import (
-	// "fmt"
+	"fmt"
 	"github.com/anyangateny1/Load-Balancer/internal/loadbalancer"
 	"net"
 	// "strings"
@@ -49,13 +49,27 @@ func sendMessage(t *testing.T, addr net.Addr, msg string) string {
 
 func TestPacketForwarding(t *testing.T) {
 
-	lb := startLoadBalancer(t, 1000)
+	lb := startLoadBalancer(t, 10)
 
 	response := sendMessage(t, lb.Addr(), "Hello\n")
 	expected := "Server 0 ACK: HELLO\n"
 
 	if response != expected {
 		t.Fatalf("unexpected response: %q, want %q", response, expected)
+	}
+
+}
+func TestRoundRobin(t *testing.T) {
+
+	const numOfServers = 10
+	lb := startLoadBalancer(t, numOfServers)
+
+	for i := 0; i < numOfServers; i++ {
+		response := sendMessage(t, lb.Addr(), "HELLO\n")
+		expected := fmt.Sprintf("Server %d ACK: HELLO\n", i)
+		if response != expected {
+			t.Errorf("request %d unexpected response: %q, want %q", i, response, expected)
+		}
 	}
 
 }

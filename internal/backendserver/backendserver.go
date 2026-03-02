@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"strings"
@@ -51,7 +52,9 @@ func (b *BackendServer) handleConnection(conn net.Conn) {
 	reader := bufio.NewReader(conn)
 	message, err := reader.ReadString('\n')
 	if err != nil {
-		b.logger.Error("Read Error", "error", err, "server", b.serverNumber)
+		if !errors.Is(err, io.EOF) {
+			b.logger.Error("Read Error", "error", err, "server", b.serverNumber)
+		}
 		return
 	}
 

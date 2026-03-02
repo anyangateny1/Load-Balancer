@@ -13,19 +13,20 @@ import (
 
 type LoadBalancer struct {
 	algo     algorithm.Algorithm
-	backend  []*backendserver.BackendServer
+	backends []*backend
+	hc       *healthChecker
 	logger   *slog.Logger
 	listener net.Listener
 }
 
-func NewLoadBalancer(numOfServers int, algo algorithm.Algorithm) (*LoadBalancer, error) {
+func NewLoadBalancer(numOfServers int, algo algorithm.Algorithm, healthInterval time.Duration) (*LoadBalancer, error) {
 
 	const MaxServers = 1000
 	if numOfServers == 0 || numOfServers > MaxServers {
 		return nil, errors.New("number of servers must be between 1 and 1000")
 	}
 
-	var servers []*backendserver.BackendServer
+	var backends []*backend
 	slog := slog.Default()
 
 	ln, err := net.Listen("tcp", ":0")
@@ -57,7 +58,7 @@ func NewLoadBalancer(numOfServers int, algo algorithm.Algorithm) (*LoadBalancer,
 			continue
 		}
 
-		servers = append(servers, serv)
+		backends = append(backends, newBackend(serv))
 		go func(id int, s *backendserver.BackendServer) {
 			slog.Info("server starting", "server", id)
 
@@ -67,17 +68,23 @@ func NewLoadBalancer(numOfServers int, algo algorithm.Algorithm) (*LoadBalancer,
 		}(i, serv)
 	}
 
-	if len(servers) == 0 {
+	if len(backends) == 0 {
 		return nil, errors.New("failed to start any backend servers")
 	}
 
-	return &LoadBalancer{
+	lb := &LoadBalancer{
 		algo:     algo,
-		backend:  servers,
+		backends: backends,
 		logger:   slog,
 		listener: ln,
-	}, nil
+	}
 
+	if healthInterval > 0 {
+		lb.hc = newHealthChecker(backends, healthInterval, slog)
+		go lb.hc.run()
+	}
+
+	return lb, nil
 }
 
 func (lb *LoadBalancer) AcceptConnections() {
@@ -95,9 +102,26 @@ func (lb *LoadBalancer) AcceptConnections() {
 	}
 }
 
+func (lb *LoadBalancer) healthyBackends() []*backend {
+	healthy := make([]*backend, 0, len(lb.backends))
+	for _, b := range lb.backends {
+		if b.healthy.Load() {
+			healthy = append(healthy, b)
+		}
+	}
+	return healthy
+}
+
 func (lb *LoadBalancer) pipeConnections(clientConn net.Conn) {
-	index := lb.algo.Next(len(lb.backend))
-	backendAddr := lb.backend[index].Addr()
+	healthy := lb.healthyBackends()
+	if len(healthy) == 0 {
+		lb.logger.Error("no healthy backends available")
+		_ = clientConn.Close()
+		return
+	}
+
+	index := lb.algo.Next(len(healthy))
+	backendAddr := healthy[index].server.Addr()
 
 	backendConn, err := net.Dial(backendAddr.Network(), backendAddr.String())
 	if err != nil {
@@ -120,10 +144,14 @@ func (lb *LoadBalancer) pipeConnections(clientConn net.Conn) {
 }
 
 func (lb *LoadBalancer) Close() error {
-	for _, b := range lb.backend {
-		err := b.Close()
+	if lb.hc != nil {
+		lb.hc.stop()
+	}
+
+	for _, b := range lb.backends {
+		err := b.server.Close()
 		if err != nil {
-			lb.logger.Error("Failed to close backend:", "error", err, "server", b.Addr().String())
+			lb.logger.Error("Failed to close backend:", "error", err, "server", b.server.Addr().String())
 			continue
 		}
 	}

@@ -12,7 +12,7 @@ import (
 func startLoadBalancer(t *testing.T, num_of_servers int, algo algorithm.Algorithm) *loadbalancer.LoadBalancer {
 	t.Helper()
 
-	lb, err := loadbalancer.NewLoadBalancer(num_of_servers, algo)
+	lb, err := loadbalancer.NewLoadBalancer(num_of_servers, algo, 0)
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
 	}

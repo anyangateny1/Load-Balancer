@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/anyangateny1/Load-Balancer/internal/algorithm"
 	"github.com/anyangateny1/Load-Balancer/internal/loadbalancer"
@@ -15,6 +16,7 @@ import (
 func main() {
 	algoFlag := flag.String("algo", "roundrobin", "load balancing algorithm (roundrobin, random)")
 	servers := flag.Int("servers", 3, "number of backend servers")
+	healthInterval := flag.Duration("health-interval", 5*time.Second, "health check interval (0 to disable)")
 	flag.Parse()
 
 	algo, err := parseAlgorithm(*algoFlag)
@@ -22,7 +24,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	lb, err := loadbalancer.NewLoadBalancer(*servers, algo)
+	lb, err := loadbalancer.NewLoadBalancer(*servers, algo, *healthInterval)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -35,8 +37,8 @@ func main() {
 		_ = lb.Close()
 	}()
 
-	fmt.Printf("load balancer listening on %s (algo=%s, backends=%d)\n",
-		lb.Addr(), *algoFlag, *servers)
+	fmt.Printf("load balancer listening on %s (algo=%s, backends=%d, health-interval=%s)\n",
+		lb.Addr(), *algoFlag, *servers, *healthInterval)
 	lb.AcceptConnections()
 }
 

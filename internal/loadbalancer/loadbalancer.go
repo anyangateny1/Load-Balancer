@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/anyangateny1/Load-Balancer/internal/algorithm"
@@ -130,17 +131,19 @@ func (lb *LoadBalancer) pipeConnections(clientConn net.Conn) {
 		return
 	}
 
+	var wg sync.WaitGroup
+	wg.Add(2)
 	go func() {
-		defer func() { _ = backendConn.Close() }()
-		defer func() { _ = clientConn.Close() }()
+		defer wg.Done()
 		_, _ = io.Copy(backendConn, clientConn)
 	}()
-
 	go func() {
-		defer func() { _ = backendConn.Close() }()
-		defer func() { _ = clientConn.Close() }()
+		defer wg.Done()
 		_, _ = io.Copy(clientConn, backendConn)
 	}()
+	wg.Wait()
+	_ = backendConn.Close()
+	_ = clientConn.Close()
 }
 
 func (lb *LoadBalancer) Close() error {

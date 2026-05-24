@@ -19,14 +19,13 @@ type LoadBalancer struct {
 }
 
 func NewLoadBalancer(numOfServers int, algo algorithm.Algorithm) (*LoadBalancer, error) {
-
 	const MaxServers = 1000
 	if numOfServers == 0 || numOfServers > MaxServers {
 		return nil, errors.New("number of servers must be between 1 and 1000")
 	}
 
 	var servers []*backendserver.BackendServer
-	slog := slog.Default()
+	logger := slog.Default()
 
 	ln, err := net.Listen("tcp", ":0")
 	if err != nil {
@@ -43,7 +42,8 @@ func NewLoadBalancer(numOfServers int, algo algorithm.Algorithm) (*LoadBalancer,
 				break
 			}
 
-			slog.Error("server start failed",
+			logger.Error(
+				"server start failed",
 				"server", i,
 				"attempt", attempt,
 				"error", err,
@@ -53,17 +53,17 @@ func NewLoadBalancer(numOfServers int, algo algorithm.Algorithm) (*LoadBalancer,
 		}
 
 		if err != nil {
-			slog.Error("server permanently failed to start", "server", i)
+			logger.Error("server permanently failed to start", "server", i)
 			continue
 		}
 
 		servers = append(servers, serv)
 		go func(id int, s *backendserver.BackendServer) {
-			slog.Info("server starting", "server", id)
+			logger.Info("server starting", "server", id)
 
 			s.AcceptConnections()
 
-			slog.Info("server stopped", "server", id)
+			logger.Info("server stopped", "server", id)
 		}(i, serv)
 	}
 
@@ -71,13 +71,20 @@ func NewLoadBalancer(numOfServers int, algo algorithm.Algorithm) (*LoadBalancer,
 		return nil, errors.New("failed to start any backend servers")
 	}
 
+	if len(servers) < numOfServers {
+		logger.Error(
+			"Started only servers",
+			"started", 3,
+			"expected", 10,
+		)
+	}
+
 	return &LoadBalancer{
 		algo:     algo,
 		backend:  servers,
-		logger:   slog,
+		logger:   logger,
 		listener: ln,
 	}, nil
-
 }
 
 func (lb *LoadBalancer) AcceptConnections() {

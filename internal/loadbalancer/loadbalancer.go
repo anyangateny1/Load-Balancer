@@ -114,15 +114,18 @@ func (lb *LoadBalancer) pipeConnections(clientConn net.Conn) {
 	}
 
 	go func() {
-		defer func() { _ = backendConn.Close() }()
-		defer func() { _ = clientConn.Close() }()
 		_, _ = io.Copy(backendConn, clientConn)
+
+		if tcp, ok := backendConn.(*net.TCPConn); ok {
+			_ = tcp.CloseWrite()
+		}
 	}()
 
 	go func() {
-		defer func() { _ = backendConn.Close() }()
-		defer func() { _ = clientConn.Close() }()
 		_, _ = io.Copy(clientConn, backendConn)
+
+		_ = clientConn.Close()
+		_ = backendConn.Close()
 	}()
 }
 

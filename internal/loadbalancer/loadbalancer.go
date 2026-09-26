@@ -74,8 +74,8 @@ func NewLoadBalancer(numOfServers int, algo algorithm.Algorithm) (*LoadBalancer,
 	if len(servers) < numOfServers {
 		logger.Error(
 			"Started only servers",
-			"started", 3,
-			"expected", 10,
+			"started", len(servers),
+			"expected", numOfServers,
 		)
 	}
 

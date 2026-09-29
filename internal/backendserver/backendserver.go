@@ -95,13 +95,6 @@ func (b *BackendServer) Close() error {
 	return nil
 }
 
-func (b *BackendServer) Conn() net.Listener {
-	if b.listener != nil {
-		return b.listener
-	}
-	return nil
-}
-
 func (b *BackendServer) Addr() net.Addr {
 	if b.listener == nil {
 		return nil

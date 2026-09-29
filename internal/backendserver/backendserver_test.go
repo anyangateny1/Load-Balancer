@@ -2,6 +2,7 @@ package backendserver_test
 
 import (
 	"fmt"
+	"log/slog"
 	"net"
 	"strings"
 	"sync"
@@ -14,12 +15,12 @@ import (
 func startServer(t *testing.T, id int) *backendserver.BackendServer {
 	t.Helper()
 
-	server, err := backendserver.NewBackendServer(id)
+	server := backendserver.NewBackendServer(slog.Default())
+
+	err := server.StartListening()
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
 	}
-
-	go server.AcceptConnections()
 	t.Cleanup(func() { _ = server.Close() })
 
 	time.Sleep(100 * time.Millisecond)
@@ -53,7 +54,7 @@ func TestHandlingConnection(t *testing.T) {
 	server := startServer(t, 1)
 
 	response := sendMessage(t, server.Addr(), "Hello\n")
-	expected := "Server 1 ACK: HELLO\n"
+	expected := "ACK: HELLO\n"
 	if response != expected {
 		t.Fatalf("unexpected response: %q, want %q", response, expected)
 	}
@@ -72,7 +73,7 @@ func TestMultipleConnections(t *testing.T) {
 
 			msg := fmt.Sprintf("Hello from connection %d\n", connID)
 			response := sendMessage(t, server.Addr(), msg)
-			expected := fmt.Sprintf("Server 1 ACK: %s", strings.ToUpper(msg))
+			expected := fmt.Sprintf("ACK: %s", strings.ToUpper(msg))
 			if response != expected {
 				t.Errorf("connection %d unexpected response: %q, want %q", connID, response, expected)
 			}
@@ -117,7 +118,7 @@ func TestClientFragmentation(t *testing.T) {
 	}
 
 	response := string(buf[:n])
-	expected := "Server 1 ACK: " + strings.ToUpper(fullMsg)
+	expected := "ACK: " + strings.ToUpper(fullMsg)
 
 	if response != expected {
 		t.Fatalf("unexpected response: %q, want %q", response, expected)

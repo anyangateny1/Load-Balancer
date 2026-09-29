@@ -10,22 +10,26 @@ import (
 )
 
 type BackendServer struct {
-	serverNumber int
-	logger       *slog.Logger
-	listener     net.Listener
+	logger   *slog.Logger
+	listener net.Listener
 }
 
-func NewBackendServer(num int) (*BackendServer, error) {
+func NewBackendServer(logger *slog.Logger) *BackendServer {
+	return &BackendServer{
+		logger: logger,
+	}
+}
+
+func (b *BackendServer) StartListening() error {
 	ln, err := net.Listen("tcp", ":0")
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return &BackendServer{
-		serverNumber: num,
-		logger:       slog.Default(),
-		listener:     ln,
-	}, nil
+	b.listener = ln
+	go b.AcceptConnections()
+
+	return nil
 }
 
 func (b *BackendServer) AcceptConnections() {
@@ -33,10 +37,10 @@ func (b *BackendServer) AcceptConnections() {
 		conn, err := b.listener.Accept()
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) {
-				b.logger.Info("Listener closed, stopping server", "server", b.serverNumber)
+				b.logger.Info("Listener closed, stopping server")
 				return
 			}
-			b.logger.Error("Error while accepting", "error", err, "server", b.serverNumber)
+			b.logger.Error("Error while accepting", "error", err)
 			return
 		}
 		go b.handleConnection(conn)
@@ -51,21 +55,28 @@ func (b *BackendServer) handleConnection(conn net.Conn) {
 	reader := bufio.NewReader(conn)
 	message, err := reader.ReadString('\n')
 	if err != nil {
-		b.logger.Error("Read Error", "error", err, "server", b.serverNumber)
+		b.logger.Error("Read Error", "error", err)
 		return
 	}
 
 	ackMsg := strings.ToUpper(strings.TrimSpace(message))
-	response := fmt.Sprintf("Server %d ACK: %s\n", b.serverNumber, ackMsg)
+	response := fmt.Sprintf("ACK: %s\n", ackMsg)
 	_, err = conn.Write([]byte(response))
 	if err != nil {
-		b.logger.Error("Server Write Error", "error", err, "server", b.serverNumber)
+		b.logger.Error("Server Write Error", "error", err)
 	}
 }
 
 func (b *BackendServer) Close() error {
 	if b.listener != nil {
 		return b.listener.Close()
+	}
+	return nil
+}
+
+func (b *BackendServer) Conn() net.Listener {
+	if b.listener != nil {
+		return b.listener
 	}
 	return nil
 }

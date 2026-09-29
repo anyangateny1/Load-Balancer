@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -12,18 +11,28 @@ import (
 	"github.com/anyangateny1/Load-Balancer/internal/backendserver"
 )
 
-func startServer(t *testing.T, id int) *backendserver.BackendServer {
+type EchoHandler struct{}
+
+func (EchoHandler) HandleMessage(msg []byte) ([]byte, error) {
+	return msg, nil
+}
+
+func startServer(t *testing.T) *backendserver.BackendServer {
 	t.Helper()
 
-	server := backendserver.NewBackendServer(slog.Default())
-
-	err := server.StartListening()
+	server, err := backendserver.NewBackendServer(slog.Default(), EchoHandler{})
 	if err != nil {
-		t.Fatalf("failed to listen: %v", err)
+		t.Fatalf("failed to create server: %v", err)
 	}
-	t.Cleanup(func() { _ = server.Close() })
 
-	time.Sleep(100 * time.Millisecond)
+	if err := server.StartListening(); err != nil {
+		t.Fatalf("failed to start server: %v", err)
+	}
+
+	t.Cleanup(func() {
+		_ = server.Close()
+	})
+
 	return server
 }
 
@@ -34,14 +43,14 @@ func sendMessage(t *testing.T, addr net.Addr, msg string) string {
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
-	defer func() { _ = conn.Close() }()
+	defer conn.Close()
 
-	_, err = conn.Write([]byte(msg))
-	if err != nil {
+	if _, err := conn.Write([]byte(msg)); err != nil {
 		t.Fatalf("failed to write: %v", err)
 	}
 
 	buf := make([]byte, 1024)
+
 	n, err := conn.Read(buf)
 	if err != nil {
 		t.Fatalf("failed to read: %v", err)
@@ -50,32 +59,40 @@ func sendMessage(t *testing.T, addr net.Addr, msg string) string {
 	return string(buf[:n])
 }
 
-func TestHandlingConnection(t *testing.T) {
-	server := startServer(t, 1)
+func TestHandleConnection(t *testing.T) {
+	server := startServer(t)
 
-	response := sendMessage(t, server.Addr(), "Hello\n")
-	expected := "ACK: HELLO\n"
-	if response != expected {
-		t.Fatalf("unexpected response: %q, want %q", response, expected)
+	msg := "Hello\n"
+
+	response := sendMessage(t, server.Addr(), msg)
+
+	if response != msg {
+		t.Fatalf("unexpected response: %q, want %q", response, msg)
 	}
 }
 
 func TestMultipleConnections(t *testing.T) {
-	server := startServer(t, 1)
+	server := startServer(t)
 
-	numConnections := 5
+	const numConnections = 5
+
 	var wg sync.WaitGroup
 	wg.Add(numConnections)
 
 	for i := range numConnections {
-		go func(connID int) {
+		go func(id int) {
 			defer wg.Done()
 
-			msg := fmt.Sprintf("Hello from connection %d\n", connID)
+			msg := fmt.Sprintf("Hello from connection %d\n", id)
 			response := sendMessage(t, server.Addr(), msg)
-			expected := fmt.Sprintf("ACK: %s", strings.ToUpper(msg))
-			if response != expected {
-				t.Errorf("connection %d unexpected response: %q, want %q", connID, response, expected)
+
+			if response != msg {
+				t.Errorf(
+					"connection %d: unexpected response: %q, want %q",
+					id,
+					response,
+					msg,
+				)
 			}
 		}(i)
 	}
@@ -84,15 +101,13 @@ func TestMultipleConnections(t *testing.T) {
 }
 
 func TestClientFragmentation(t *testing.T) {
-	server := startServer(t, 1)
+	server := startServer(t)
 
 	conn, err := net.Dial(server.Addr().Network(), server.Addr().String())
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
-	defer func() { _ = conn.Close() }()
-
-	fullMsg := "Hello Fragmented World\n"
+	defer conn.Close()
 
 	fragments := []string{
 		"H",
@@ -104,29 +119,32 @@ func TestClientFragmentation(t *testing.T) {
 		"\n",
 	}
 
-	for _, part := range fragments {
-		if _, err := conn.Write([]byte(part)); err != nil {
+	expected := "Hello Fragmented World\n"
+
+	for _, fragment := range fragments {
+		if _, err := conn.Write([]byte(fragment)); err != nil {
 			t.Fatalf("failed to write fragment: %v", err)
 		}
-		time.Sleep(10 * time.Millisecond) // encourage packet splitting
+
+		time.Sleep(10 * time.Millisecond)
 	}
 
 	buf := make([]byte, 1024)
+
 	n, err := conn.Read(buf)
 	if err != nil {
-		t.Fatalf("failed to read: %v", err)
+		t.Fatalf("failed to read response: %v", err)
 	}
 
 	response := string(buf[:n])
-	expected := "ACK: " + strings.ToUpper(fullMsg)
 
 	if response != expected {
 		t.Fatalf("unexpected response: %q, want %q", response, expected)
 	}
 }
 
-func TestMixedClientSpeeds_FastFinishesFirst(t *testing.T) {
-	server := startServer(t, 1)
+func TestMultipleClientsAreIndependent(t *testing.T) {
+	server := startServer(t)
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -138,19 +156,31 @@ func TestMixedClientSpeeds_FastFinishesFirst(t *testing.T) {
 
 		conn, err := net.Dial(server.Addr().Network(), server.Addr().String())
 		if err != nil {
-			t.Errorf("slow dial error: %v", err)
+			t.Errorf("slow client dial error: %v", err)
 			return
 		}
-		defer func() { _ = conn.Close() }()
+		defer conn.Close()
 
-		fragments := []string{"H", "ello ", "World", "\n"}
-		for _, part := range fragments {
-			_, _ = conn.Write([]byte(part))
-			time.Sleep(100 * time.Millisecond) // very slow sender
+		fragments := []string{
+			"H",
+			"ello ",
+			"World",
+			"\n",
+		}
+
+		for _, fragment := range fragments {
+			if _, err := conn.Write([]byte(fragment)); err != nil {
+				t.Errorf("slow client write error: %v", err)
+				return
+			}
+
+			time.Sleep(100 * time.Millisecond)
 		}
 
 		buf := make([]byte, 1024)
-		_, _ = conn.Read(buf)
+		if _, err := conn.Read(buf); err != nil {
+			t.Errorf("slow client read error: %v", err)
+		}
 	}()
 
 	go func() {
@@ -160,18 +190,28 @@ func TestMixedClientSpeeds_FastFinishesFirst(t *testing.T) {
 
 		conn, err := net.Dial(server.Addr().Network(), server.Addr().String())
 		if err != nil {
-			t.Errorf("fast dial error: %v", err)
+			t.Errorf("fast client dial error: %v", err)
 			return
 		}
-		defer func() { _ = conn.Close() }()
+		defer conn.Close()
 
 		msg := "FAST\n"
-		_, _ = conn.Write([]byte(msg))
+
+		if _, err := conn.Write([]byte(msg)); err != nil {
+			t.Errorf("fast client write error: %v", err)
+			return
+		}
 
 		buf := make([]byte, 1024)
-		_, err = conn.Read(buf)
+
+		n, err := conn.Read(buf)
 		if err != nil {
-			t.Errorf("fast read error: %v", err)
+			t.Errorf("fast client read error: %v", err)
+			return
+		}
+
+		if response := string(buf[:n]); response != msg {
+			t.Errorf("fast client response: %q, want %q", response, msg)
 			return
 		}
 
@@ -183,6 +223,6 @@ func TestMixedClientSpeeds_FastFinishesFirst(t *testing.T) {
 	duration := <-fastDone
 
 	if duration > 150*time.Millisecond {
-		t.Fatalf("fast client was delayed too long: %v ", duration)
+		t.Fatalf("fast client was delayed too long: %v", duration)
 	}
 }

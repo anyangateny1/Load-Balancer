@@ -3,21 +3,33 @@ package backendserver
 import (
 	"bufio"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net"
-	"strings"
+	"time"
 )
 
+type Handler interface {
+	HandleMessage([]byte) ([]byte, error)
+}
 type BackendServer struct {
 	logger   *slog.Logger
 	listener net.Listener
+	handler  Handler
 }
 
-func NewBackendServer(logger *slog.Logger) *BackendServer {
-	return &BackendServer{
-		logger: logger,
+func NewBackendServer(logger *slog.Logger, handler Handler) (*BackendServer, error) {
+	if handler == nil {
+		return nil, errors.New("backend: handler cannot be nil")
 	}
+
+	if logger == nil {
+		logger = slog.Default()
+	}
+
+	return &BackendServer{
+		logger:  logger,
+		handler: handler,
+	}, nil
 }
 
 func (b *BackendServer) StartListening() error {
@@ -52,16 +64,25 @@ func (b *BackendServer) handleConnection(conn net.Conn) {
 		_ = conn.Close()
 	}()
 
+	if err := conn.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
+		b.logger.Error("set read deadline", "error", err)
+		return
+	}
+
 	reader := bufio.NewReader(conn)
-	message, err := reader.ReadString('\n')
+	message, err := reader.ReadBytes('\n')
 	if err != nil {
 		b.logger.Error("Read Error", "error", err)
 		return
 	}
 
-	ackMsg := strings.ToUpper(strings.TrimSpace(message))
-	response := fmt.Sprintf("ACK: %s\n", ackMsg)
-	_, err = conn.Write([]byte(response))
+	ackMsg, err := b.handler.HandleMessage(message)
+	if err != nil {
+		b.logger.Error("Handle Message Error", "error", err)
+		return
+	}
+
+	_, err = conn.Write(ackMsg)
 	if err != nil {
 		b.logger.Error("Server Write Error", "error", err)
 	}

@@ -11,16 +11,14 @@ import (
 	"github.com/anyangateny1/Load-Balancer/internal/backendserver"
 )
 
-type EchoHandler struct{}
-
-func (EchoHandler) HandleMessage(msg []byte) ([]byte, error) {
+func EchoHandler(msg []byte) ([]byte, error) {
 	return msg, nil
 }
 
 func startServer(t *testing.T) *backendserver.BackendServer {
 	t.Helper()
 
-	server, err := backendserver.NewBackendServer(slog.Default(), EchoHandler{})
+	server, err := backendserver.NewBackendServerWithHandler(slog.Default(), EchoHandler)
 	if err != nil {
 		t.Fatalf("failed to create server: %v", err)
 	}
@@ -43,7 +41,7 @@ func sendMessage(t *testing.T, addr net.Addr, msg string) string {
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	if _, err := conn.Write([]byte(msg)); err != nil {
 		t.Fatalf("failed to write: %v", err)
@@ -107,7 +105,7 @@ func TestClientFragmentation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	fragments := []string{
 		"H",
@@ -159,7 +157,7 @@ func TestMultipleClientsAreIndependent(t *testing.T) {
 			t.Errorf("slow client dial error: %v", err)
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		fragments := []string{
 			"H",
@@ -193,7 +191,7 @@ func TestMultipleClientsAreIndependent(t *testing.T) {
 			t.Errorf("fast client dial error: %v", err)
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		msg := "FAST\n"
 

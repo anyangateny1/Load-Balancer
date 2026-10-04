@@ -2,24 +2,38 @@ package backendserver
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"log/slog"
 	"net"
 	"time"
 )
 
-type Handler interface {
-	HandleMessage([]byte) ([]byte, error)
+type HandleMessage func([]byte) ([]byte, error)
+
+func ackMessage(msg []byte) ([]byte, error) {
+	ack := []byte("ACK: ")
+	ackMsg := append(ack, bytes.TrimSpace(msg)...)
+
+	return ackMsg, nil
 }
+
 type BackendServer struct {
 	logger   *slog.Logger
 	listener net.Listener
-	handler  Handler
+	handler  HandleMessage
 }
 
-func NewBackendServer(logger *slog.Logger, handler Handler) (*BackendServer, error) {
+func NewBackendServer(logger *slog.Logger) *BackendServer {
+	return &BackendServer{
+		logger:  logger,
+		handler: ackMessage,
+	}
+}
+
+func NewBackendServerWithHandler(logger *slog.Logger, handler HandleMessage) (*BackendServer, error) {
 	if handler == nil {
-		return nil, errors.New("backend: handler cannot be nil")
+		return nil, errors.New("Nil handler provided, handler expected")
 	}
 
 	if logger == nil {
@@ -39,12 +53,12 @@ func (b *BackendServer) StartListening() error {
 	}
 
 	b.listener = ln
-	go b.AcceptConnections()
+	go b.acceptConnections()
 
 	return nil
 }
 
-func (b *BackendServer) AcceptConnections() {
+func (b *BackendServer) acceptConnections() {
 	for {
 		conn, err := b.listener.Accept()
 		if err != nil {
@@ -76,7 +90,7 @@ func (b *BackendServer) handleConnection(conn net.Conn) {
 		return
 	}
 
-	ackMsg, err := b.handler.HandleMessage(message)
+	ackMsg, err := b.handler(message)
 	if err != nil {
 		b.logger.Error("Handle Message Error", "error", err)
 		return

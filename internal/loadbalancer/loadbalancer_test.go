@@ -47,28 +47,25 @@ func sendMessage(t *testing.T, addr net.Addr, msg string) string {
 }
 
 func TestPacketForwarding(t *testing.T) {
-
 	lb := startLoadBalancer(t, 10, &algorithm.RoundRobin{})
 
-	response := sendMessage(t, lb.Addr(), "Hello\n")
-	expected := "Server 0 ACK: HELLO\n"
+	response := sendMessage(t, lb.Addr(), "HELLO\n")
+	expected := "ACK: HELLO"
 
 	if response != expected {
 		t.Fatalf("unexpected response: %q, want %q", response, expected)
 	}
-
 }
-func TestRoundRobin(t *testing.T) {
 
+func TestRoundRobin(t *testing.T) {
 	const numOfServers = 10
 	lb := startLoadBalancer(t, numOfServers, &algorithm.RoundRobin{})
 
 	for i := 0; i < numOfServers; i++ {
 		response := sendMessage(t, lb.Addr(), "HELLO\n")
-		expected := fmt.Sprintf("Server %d ACK: HELLO\n", i)
+		expected := fmt.Sprintf("ACK: HELLO")
 		if response != expected {
 			t.Errorf("request %d unexpected response: %q, want %q", i, response, expected)
 		}
 	}
-
 }

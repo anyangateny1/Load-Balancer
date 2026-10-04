@@ -2,10 +2,10 @@ package loadbalancer
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
-	"time"
 
 	"github.com/anyangateny1/Load-Balancer/internal/algorithm"
 	"github.com/anyangateny1/Load-Balancer/internal/backendserver"
@@ -33,38 +33,16 @@ func NewLoadBalancer(numOfServers int, algo algorithm.Algorithm) (*LoadBalancer,
 	}
 
 	for i := range numOfServers {
-		var serv *backendserver.BackendServer
-		var err error
+		serv := backendserver.NewBackendServer(logger)
 
-		for attempt := 1; attempt <= 3; attempt++ {
-			serv, err = startServer(i)
-			if err == nil {
-				break
-			}
-
-			logger.Error(
-				"server start failed",
-				"server", i,
-				"attempt", attempt,
-				"error", err,
-			)
-
-			time.Sleep(time.Second)
+		if err := serv.StartListening(); err != nil {
+			_ = ln.Close()
+			return nil, fmt.Errorf("failed to start backend server %d: %w", i, err)
 		}
 
-		if err != nil {
-			logger.Error("server permanently failed to start", "server", i)
-			continue
-		}
+		logger.Info("server started", "server", i, "addr", serv.Addr())
 
 		servers = append(servers, serv)
-		go func(id int, s *backendserver.BackendServer) {
-			logger.Info("server starting", "server", id)
-
-			s.AcceptConnections()
-
-			logger.Info("server stopped", "server", id)
-		}(i, serv)
 	}
 
 	if len(servers) == 0 {
@@ -149,6 +127,6 @@ func (lb *LoadBalancer) Addr() net.Addr {
 	return nil
 }
 
-func startServer(id int) (*backendserver.BackendServer, error) {
-	return backendserver.NewBackendServer(id)
+func startServer(logger *slog.Logger) *backendserver.BackendServer {
+	return backendserver.NewBackendServer(logger)
 }

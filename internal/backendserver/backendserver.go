@@ -33,7 +33,7 @@ func NewBackendServer(logger *slog.Logger) *BackendServer {
 
 func NewBackendServerWithHandler(logger *slog.Logger, handler HandleMessage) (*BackendServer, error) {
 	if handler == nil {
-		return nil, errors.New("Nil handler provided, handler expected")
+		return nil, errors.New("nil handler provided, handler expected")
 	}
 
 	if logger == nil {

@@ -126,7 +126,3 @@ func (lb *LoadBalancer) Addr() net.Addr {
 
 	return nil
 }
-
-func startServer(logger *slog.Logger) *backendserver.BackendServer {
-	return backendserver.NewBackendServer(logger)
-}

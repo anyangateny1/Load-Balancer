@@ -1,7 +1,6 @@
 package loadbalancer_test
 
 import (
-	"fmt"
 	"net"
 	"testing"
 
@@ -61,9 +60,9 @@ func TestRoundRobin(t *testing.T) {
 	const numOfServers = 10
 	lb := startLoadBalancer(t, numOfServers, &algorithm.RoundRobin{})
 
-	for i := 0; i < numOfServers; i++ {
+	for i := range numOfServers {
 		response := sendMessage(t, lb.Addr(), "HELLO\n")
-		expected := fmt.Sprintf("ACK: HELLO")
+		expected := "ACK: HELLO"
 		if response != expected {
 			t.Errorf("request %d unexpected response: %q, want %q", i, response, expected)
 		}

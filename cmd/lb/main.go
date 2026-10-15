@@ -22,7 +22,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	lb, err := loadbalancer.NewLoadBalancer(*servers, algo)
+	lb, err := loadbalancer.NewLoadBalancer(uint16(*servers), algo)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func main() {
 	lb.AcceptConnections()
 }
 
-func parseAlgorithm(name string) (algorithm.Algorithm, error) {
+func parseAlgorithm(name string) (loadbalancer.BackendSelector, error) {
 	switch name {
 	case "roundrobin":
 		return &algorithm.RoundRobin{}, nil

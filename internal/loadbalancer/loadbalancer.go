@@ -7,20 +7,23 @@ import (
 	"log/slog"
 	"net"
 
-	"github.com/anyangateny1/Load-Balancer/internal/algorithm"
+	"github.com/anyangateny1/Load-Balancer/config"
 	"github.com/anyangateny1/Load-Balancer/internal/backendserver"
 )
 
+type BackendSelector interface {
+	Next(numBackends int) int
+}
+
 type LoadBalancer struct {
-	algo     algorithm.Algorithm
+	algo     BackendSelector
 	backend  []*backendserver.BackendServer
 	logger   *slog.Logger
 	listener net.Listener
 }
 
-func NewLoadBalancer(numOfServers int, algo algorithm.Algorithm) (*LoadBalancer, error) {
-	const MaxServers = 1000
-	if numOfServers == 0 || numOfServers > MaxServers {
+func NewLoadBalancer(numOfServers uint16, algo BackendSelector) (*LoadBalancer, error) {
+	if numOfServers <= 0 || numOfServers > config.MAX_NUMBER_OF_SERVERS {
 		return nil, errors.New("number of servers must be between 1 and 1000")
 	}
 
@@ -49,7 +52,7 @@ func NewLoadBalancer(numOfServers int, algo algorithm.Algorithm) (*LoadBalancer,
 		return nil, errors.New("failed to start any backend servers")
 	}
 
-	if len(servers) < numOfServers {
+	if uint16(len(servers)) < numOfServers {
 		logger.Error(
 			"Started only servers",
 			"started", len(servers),

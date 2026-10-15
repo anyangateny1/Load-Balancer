@@ -8,7 +8,7 @@ import (
 	"github.com/anyangateny1/Load-Balancer/internal/loadbalancer"
 )
 
-func startLoadBalancer(t *testing.T, num_of_servers int, algo algorithm.Algorithm) *loadbalancer.LoadBalancer {
+func startLoadBalancer(t *testing.T, num_of_servers uint16, algo loadbalancer.BackendSelector) *loadbalancer.LoadBalancer {
 	t.Helper()
 
 	lb, err := loadbalancer.NewLoadBalancer(num_of_servers, algo)

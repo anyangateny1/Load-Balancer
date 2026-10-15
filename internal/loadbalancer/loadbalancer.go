@@ -23,7 +23,7 @@ type LoadBalancer struct {
 }
 
 func NewLoadBalancer(numOfServers uint16, algo BackendSelector) (*LoadBalancer, error) {
-	if numOfServers <= 0 || numOfServers > config.MAX_NUMBER_OF_SERVERS {
+	if numOfServers < 1 || numOfServers > config.MAX_NUMBER_OF_SERVERS {
 		return nil, errors.New("number of servers must be between 1 and 1000")
 	}
 

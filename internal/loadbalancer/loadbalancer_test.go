@@ -4,6 +4,7 @@ import (
 	"net"
 	"testing"
 
+	"github.com/anyangateny1/Load-Balancer/config"
 	"github.com/anyangateny1/Load-Balancer/internal/algorithm"
 	"github.com/anyangateny1/Load-Balancer/internal/loadbalancer"
 )
@@ -66,5 +67,23 @@ func TestRoundRobin(t *testing.T) {
 		if response != expected {
 			t.Errorf("request %d unexpected response: %q, want %q", i, response, expected)
 		}
+	}
+}
+
+func TestLoadBalancerFailsWithTooManyServers(t *testing.T) {
+	const numOfServers = config.MAX_NUMBER_OF_SERVERS + 1
+	_, err := loadbalancer.NewLoadBalancer(numOfServers, nil)
+
+	if err == nil {
+		t.Fatalf("Expected LoadBalancer to fail but it succeeded")
+	}
+}
+
+func TestLoadBalancerFailsWithZeroServers(t *testing.T) {
+	const numOfServers = 0
+	_, err := loadbalancer.NewLoadBalancer(numOfServers, nil)
+
+	if err == nil {
+		t.Fatalf("Expected LoadBalancer to fail but it succeeded")
 	}
 }

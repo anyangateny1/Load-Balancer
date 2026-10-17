@@ -70,7 +70,7 @@ func TestRoundRobin(t *testing.T) {
 }
 
 func TestLoadBalancerFailsWithTooManyServers(t *testing.T) {
-	const numOfServers = loadbalancer.Max_number_of_servers + 1
+	const numOfServers = loadbalancer.MaxNumberOfServers + 1
 	_, err := loadbalancer.NewLoadBalancer(numOfServers, nil)
 
 	if err == nil {

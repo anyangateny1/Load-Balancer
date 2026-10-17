@@ -1,3 +1,4 @@
+// Package loadbalancer implements a Layer 4 TCP load balancer.
 package loadbalancer
 
 import (
@@ -11,24 +12,32 @@ import (
 )
 
 // TODO: Look into injecting port?
-const (
-	default_port          uint16 = 8080
-	Max_number_of_servers uint16 = 1000
-)
 
+// MaxNumberOfServers is the maximum number of backend servers supported.
+const MaxNumberOfServers uint16 = 1000
+
+// BackendSelector selects the index of the next backend server.
 type BackendSelector interface {
 	Next(numBackends int) int
 }
 
+// LoadBalancer is a Layer 4 load balancer that pipes connections to servers.
+// It selects the `next` server via an injected algorithm.
 type LoadBalancer struct {
 	algo     BackendSelector
-	backend  []*backendserver.BackendServer
+	backends []*backendserver.BackendServer
 	logger   *slog.Logger
 	listener net.Listener
 }
 
+// TODO: Refactor to accept a list of addresses
+
+// TODO: Refactor to accept a port
+
+// NewLoadBalancer creates a load balancer with the specified number of backend
+// servers and selection algorithm.
 func NewLoadBalancer(numOfServers uint16, algo BackendSelector) (*LoadBalancer, error) {
-	if numOfServers < 1 || numOfServers > Max_number_of_servers {
+	if numOfServers < 1 || numOfServers > MaxNumberOfServers {
 		return nil, errors.New("number of servers must be between 1 and 1000")
 	}
 
@@ -67,12 +76,15 @@ func NewLoadBalancer(numOfServers uint16, algo BackendSelector) (*LoadBalancer, 
 
 	return &LoadBalancer{
 		algo:     algo,
-		backend:  servers,
+		backends: servers,
 		logger:   logger,
 		listener: ln,
 	}, nil
 }
 
+// TODO: refactor and make AcceptConnections return the connection.
+
+// AcceptConnections accepts incoming client connections and proxies them to backend servers concurrently.
 func (lb *LoadBalancer) AcceptConnections() {
 	for {
 		conn, err := lb.listener.Accept()
@@ -89,8 +101,8 @@ func (lb *LoadBalancer) AcceptConnections() {
 }
 
 func (lb *LoadBalancer) pipeConnections(clientConn net.Conn) {
-	index := lb.algo.Next(len(lb.backend))
-	backendAddr := lb.backend[index].Addr()
+	index := lb.algo.Next(len(lb.backends))
+	backendAddr := lb.backends[index].Addr()
 
 	backendConn, err := net.Dial(backendAddr.Network(), backendAddr.String())
 	if err != nil {
@@ -115,8 +127,9 @@ func (lb *LoadBalancer) pipeConnections(clientConn net.Conn) {
 	}()
 }
 
+// Close closes the backend servers and the load balancer's listener.
 func (lb *LoadBalancer) Close() error {
-	for _, b := range lb.backend {
+	for _, b := range lb.backends {
 		err := b.Close()
 		if err != nil {
 			lb.logger.Error("Failed to close backend:", "error", err, "server", b.Addr().String())
@@ -127,6 +140,7 @@ func (lb *LoadBalancer) Close() error {
 	return lb.listener.Close()
 }
 
+// Addr returns the load balancer's listening address.
 func (lb *LoadBalancer) Addr() net.Addr {
 	if lb.listener != nil {
 		return lb.listener.Addr()

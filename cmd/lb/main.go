@@ -12,9 +12,14 @@ import (
 	"github.com/anyangateny1/Load-Balancer/internal/loadbalancer"
 )
 
+const (
+	DEFAULT_NUMBER_OF_SERVERS             int    = 3
+	DEFAULT_LOADBALANCER_BACKEND_SELECTOR string = "roundrobin"
+)
+
 func main() {
-	algoFlag := flag.String("algo", "roundrobin", "load balancing algorithm (roundrobin, random)")
-	servers := flag.Int("servers", 3, "number of backend servers")
+	algoFlag := flag.String("algo", DEFAULT_LOADBALANCER_BACKEND_SELECTOR, "load balancing algorithm (roundrobin, random)")
+	servers := flag.Int("servers", DEFAULT_NUMBER_OF_SERVERS, "number of backend servers")
 	flag.Parse()
 
 	algo, err := parseAlgorithm(*algoFlag)

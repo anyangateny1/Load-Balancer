@@ -7,8 +7,13 @@ import (
 	"log/slog"
 	"net"
 
-	"github.com/anyangateny1/Load-Balancer/config"
 	"github.com/anyangateny1/Load-Balancer/internal/backendserver"
+)
+
+// TODO: Look into injecting port?
+const (
+	default_port          uint16 = 8080
+	Max_number_of_servers uint16 = 1000
 )
 
 type BackendSelector interface {
@@ -23,7 +28,7 @@ type LoadBalancer struct {
 }
 
 func NewLoadBalancer(numOfServers uint16, algo BackendSelector) (*LoadBalancer, error) {
-	if numOfServers < 1 || numOfServers > config.MAX_NUMBER_OF_SERVERS {
+	if numOfServers < 1 || numOfServers > Max_number_of_servers {
 		return nil, errors.New("number of servers must be between 1 and 1000")
 	}
 

@@ -4,7 +4,6 @@ import (
 	"net"
 	"testing"
 
-	"github.com/anyangateny1/Load-Balancer/config"
 	"github.com/anyangateny1/Load-Balancer/internal/algorithm"
 	"github.com/anyangateny1/Load-Balancer/internal/loadbalancer"
 )
@@ -71,7 +70,7 @@ func TestRoundRobin(t *testing.T) {
 }
 
 func TestLoadBalancerFailsWithTooManyServers(t *testing.T) {
-	const numOfServers = config.MAX_NUMBER_OF_SERVERS + 1
+	const numOfServers = loadbalancer.Max_number_of_servers + 1
 	_, err := loadbalancer.NewLoadBalancer(numOfServers, nil)
 
 	if err == nil {

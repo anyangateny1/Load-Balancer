@@ -8,10 +8,11 @@ import (
 	"net"
 )
 
-// TODO: Look into injecting port?
-
 // MaxNumberOfServers is the maximum number of backend servers supported.
-const MaxNumberOfServers uint16 = 1000
+const (
+	MaxNumberOfServers uint16 = 1000
+	defaultAddress     string = "localhost:8080"
+)
 
 // Backend is the interface required for a load balancer server.
 type Backend interface {
@@ -32,21 +33,27 @@ type LoadBalancer struct {
 	listener net.Listener
 }
 
-// TODO: Refactor to accept a list of addresses
-
-// TODO: Refactor to accept a port
+// NetworkConfig contains network configuration for the load balancer, including port and address.
+type NetworkConfig struct {
+	Endpoint string
+}
 
 // NewLoadBalancer creates a load balancer with the specified number of backend
-// servers and selection algorithm.
-func NewLoadBalancer(servers []Backend, algo BackendSelector) (*LoadBalancer, error) {
+// servers, selection algorithm, and network configuration.
+func NewLoadBalancer(servers []Backend, algo BackendSelector, cfg NetworkConfig) (*LoadBalancer, error) {
 	numOfServers := len(servers)
 	if numOfServers < 1 || numOfServers > int(MaxNumberOfServers) {
 		return nil, errors.New("number of servers must be between 1 and 1000")
 	}
 
+	endpoint := cfg.Endpoint
+	if endpoint == "" {
+		endpoint = defaultAddress
+	}
+
 	logger := slog.Default()
 
-	ln, err := net.Listen("tcp", ":0")
+	ln, err := net.Listen("tcp", endpoint)
 	if err != nil {
 		return nil, err
 	}

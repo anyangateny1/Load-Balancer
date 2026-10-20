@@ -12,7 +12,7 @@ import (
 func startLoadBalancer(t *testing.T, servers []loadbalancer.Backend, algo loadbalancer.BackendSelector) *loadbalancer.LoadBalancer {
 	t.Helper()
 
-	lb, err := loadbalancer.NewLoadBalancer(servers, algo)
+	lb, err := loadbalancer.NewLoadBalancer(servers, algo, loadbalancer.NetworkConfig{})
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestRoundRobin(t *testing.T) {
 
 func TestLoadBalancerFailsWithTooManyServers(t *testing.T) {
 	servers := make([]loadbalancer.Backend, loadbalancer.MaxNumberOfServers+1)
-	_, err := loadbalancer.NewLoadBalancer(servers, &algorithm.RoundRobin{})
+	_, err := loadbalancer.NewLoadBalancer(servers, &algorithm.RoundRobin{}, loadbalancer.NetworkConfig{})
 
 	if err == nil {
 		t.Fatalf("Expected LoadBalancer to fail but it succeeded")
@@ -114,7 +114,7 @@ func TestLoadBalancerFailsWithTooManyServers(t *testing.T) {
 }
 
 func TestLoadBalancerFailsWithZeroServers(t *testing.T) {
-	_, err := loadbalancer.NewLoadBalancer(nil, &algorithm.RoundRobin{})
+	_, err := loadbalancer.NewLoadBalancer(nil, &algorithm.RoundRobin{}, loadbalancer.NetworkConfig{})
 
 	if err == nil {
 		t.Fatalf("Expected LoadBalancer to fail but it succeeded")

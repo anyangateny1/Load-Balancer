@@ -45,7 +45,7 @@ func main() {
 		addrs = append(addrs, srv.Addr())
 	}
 
-	lb, err := loadbalancer.NewLoadBalancer(addrs, algo)
+	lb, err := loadbalancer.NewLoadBalancer(addrs, algo, loadbalancer.NetworkConfig{})
 	if err != nil {
 		log.Fatal(err)
 	}

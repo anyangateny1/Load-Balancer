@@ -3,18 +3,20 @@ package loadbalancer
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"net"
-
-	"github.com/anyangateny1/Load-Balancer/internal/backendserver"
 )
 
 // TODO: Look into injecting port?
 
 // MaxNumberOfServers is the maximum number of backend servers supported.
 const MaxNumberOfServers uint16 = 1000
+
+// Backend is the interface required for a load balancer server.
+type Backend interface {
+	net.Addr
+}
 
 // BackendSelector selects the index of the next backend server.
 type BackendSelector interface {
@@ -25,7 +27,7 @@ type BackendSelector interface {
 // It selects the `next` server via an injected algorithm.
 type LoadBalancer struct {
 	algo     BackendSelector
-	backends []*backendserver.BackendServer
+	backends []Backend
 	logger   *slog.Logger
 	listener net.Listener
 }
@@ -36,42 +38,17 @@ type LoadBalancer struct {
 
 // NewLoadBalancer creates a load balancer with the specified number of backend
 // servers and selection algorithm.
-func NewLoadBalancer(numOfServers uint16, algo BackendSelector) (*LoadBalancer, error) {
-	if numOfServers < 1 || numOfServers > MaxNumberOfServers {
+func NewLoadBalancer(servers []Backend, algo BackendSelector) (*LoadBalancer, error) {
+	numOfServers := len(servers)
+	if numOfServers < 1 || numOfServers > int(MaxNumberOfServers) {
 		return nil, errors.New("number of servers must be between 1 and 1000")
 	}
 
-	var servers []*backendserver.BackendServer
 	logger := slog.Default()
 
 	ln, err := net.Listen("tcp", ":0")
 	if err != nil {
 		return nil, err
-	}
-
-	for i := range numOfServers {
-		serv := backendserver.NewBackendServer(logger)
-
-		if err := serv.StartListening(); err != nil {
-			_ = ln.Close()
-			return nil, fmt.Errorf("failed to start backend server %d: %w", i, err)
-		}
-
-		logger.Info("server started", "server", i, "addr", serv.Addr())
-
-		servers = append(servers, serv)
-	}
-
-	if len(servers) == 0 {
-		return nil, errors.New("failed to start any backend servers")
-	}
-
-	if uint16(len(servers)) < numOfServers {
-		logger.Error(
-			"Started only servers",
-			"started", len(servers),
-			"expected", numOfServers,
-		)
 	}
 
 	return &LoadBalancer{
@@ -102,7 +79,7 @@ func (lb *LoadBalancer) AcceptConnections() {
 
 func (lb *LoadBalancer) pipeConnections(clientConn net.Conn) {
 	index := lb.algo.Next(len(lb.backends))
-	backendAddr := lb.backends[index].Addr()
+	backendAddr := lb.backends[index]
 
 	backendConn, err := net.Dial(backendAddr.Network(), backendAddr.String())
 	if err != nil {
@@ -129,14 +106,6 @@ func (lb *LoadBalancer) pipeConnections(clientConn net.Conn) {
 
 // Close closes the backend servers and the load balancer's listener.
 func (lb *LoadBalancer) Close() error {
-	for _, b := range lb.backends {
-		err := b.Close()
-		if err != nil {
-			lb.logger.Error("Failed to close backend:", "error", err, "server", b.Addr().String())
-			continue
-		}
-	}
-
 	return lb.listener.Close()
 }
 

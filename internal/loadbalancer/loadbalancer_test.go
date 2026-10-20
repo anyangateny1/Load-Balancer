@@ -1,6 +1,7 @@
 package loadbalancer_test
 
 import (
+	"fmt"
 	"net"
 	"testing"
 
@@ -8,10 +9,10 @@ import (
 	"github.com/anyangateny1/Load-Balancer/internal/loadbalancer"
 )
 
-func startLoadBalancer(t *testing.T, num_of_servers uint16, algo loadbalancer.BackendSelector) *loadbalancer.LoadBalancer {
+func startLoadBalancer(t *testing.T, servers []loadbalancer.Backend, algo loadbalancer.BackendSelector) *loadbalancer.LoadBalancer {
 	t.Helper()
 
-	lb, err := loadbalancer.NewLoadBalancer(num_of_servers, algo)
+	lb, err := loadbalancer.NewLoadBalancer(servers, algo)
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
 	}
@@ -20,6 +21,39 @@ func startLoadBalancer(t *testing.T, num_of_servers uint16, algo loadbalancer.Ba
 	t.Cleanup(func() { _ = lb.Close() })
 
 	return lb
+}
+
+func startServer(t *testing.T, response string) loadbalancer.Backend {
+	t.Helper()
+
+	ln, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatalf("failed to start server: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			_, _ = fmt.Fprint(conn, response)
+			_ = conn.Close()
+		}
+	}()
+
+	return ln.Addr()
+}
+
+func startServers(t *testing.T, count int) []loadbalancer.Backend {
+	t.Helper()
+
+	addrs := make([]loadbalancer.Backend, count)
+	for i := range count {
+		addrs[i] = startServer(t, fmt.Sprintf("Server %d", i))
+	}
+	return addrs
 }
 
 func sendMessage(t *testing.T, addr net.Addr, msg string) string {
@@ -31,8 +65,7 @@ func sendMessage(t *testing.T, addr net.Addr, msg string) string {
 	}
 	defer func() { _ = conn.Close() }()
 
-	_, err = conn.Write([]byte(msg))
-	if err != nil {
+	if _, err := conn.Write([]byte(msg)); err != nil {
 		t.Fatalf("failed to write: %v", err)
 	}
 
@@ -46,7 +79,8 @@ func sendMessage(t *testing.T, addr net.Addr, msg string) string {
 }
 
 func TestPacketForwarding(t *testing.T) {
-	lb := startLoadBalancer(t, 10, &algorithm.RoundRobin{})
+	server := startServer(t, "ACK: HELLO")
+	lb := startLoadBalancer(t, []loadbalancer.Backend{server}, &algorithm.RoundRobin{})
 
 	response := sendMessage(t, lb.Addr(), "HELLO\n")
 	expected := "ACK: HELLO"
@@ -58,11 +92,12 @@ func TestPacketForwarding(t *testing.T) {
 
 func TestRoundRobin(t *testing.T) {
 	const numOfServers = 10
-	lb := startLoadBalancer(t, numOfServers, &algorithm.RoundRobin{})
+	servers := startServers(t, numOfServers)
+	lb := startLoadBalancer(t, servers, &algorithm.RoundRobin{})
 
 	for i := range numOfServers {
 		response := sendMessage(t, lb.Addr(), "HELLO\n")
-		expected := "ACK: HELLO"
+		expected := fmt.Sprintf("Server %d", i)
 		if response != expected {
 			t.Errorf("request %d unexpected response: %q, want %q", i, response, expected)
 		}
@@ -70,8 +105,8 @@ func TestRoundRobin(t *testing.T) {
 }
 
 func TestLoadBalancerFailsWithTooManyServers(t *testing.T) {
-	const numOfServers = loadbalancer.MaxNumberOfServers + 1
-	_, err := loadbalancer.NewLoadBalancer(numOfServers, nil)
+	servers := make([]loadbalancer.Backend, loadbalancer.MaxNumberOfServers+1)
+	_, err := loadbalancer.NewLoadBalancer(servers, &algorithm.RoundRobin{})
 
 	if err == nil {
 		t.Fatalf("Expected LoadBalancer to fail but it succeeded")
@@ -79,8 +114,7 @@ func TestLoadBalancerFailsWithTooManyServers(t *testing.T) {
 }
 
 func TestLoadBalancerFailsWithZeroServers(t *testing.T) {
-	const numOfServers = 0
-	_, err := loadbalancer.NewLoadBalancer(numOfServers, nil)
+	_, err := loadbalancer.NewLoadBalancer(nil, &algorithm.RoundRobin{})
 
 	if err == nil {
 		t.Fatalf("Expected LoadBalancer to fail but it succeeded")

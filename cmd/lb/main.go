@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/anyangateny1/Load-Balancer/internal/algorithm"
+	"github.com/anyangateny1/Load-Balancer/internal/backendserver"
 	"github.com/anyangateny1/Load-Balancer/internal/loadbalancer"
 )
 
@@ -32,7 +33,19 @@ func main() {
 		log.Fatal(err)
 	}
 
-	lb, err := loadbalancer.NewLoadBalancer(uint16(*servers), algo)
+	var addrs []loadbalancer.Backend
+
+	for i := 0; i < *servers; i++ {
+		srv := backendserver.NewBackendServer(logger)
+		if err := srv.StartListening(); err != nil {
+			log.Fatalf("failed to start backend server %d: %v", i, err)
+		}
+		defer func() { _ = srv.Close() }()
+
+		addrs = append(addrs, srv.Addr())
+	}
+
+	lb, err := loadbalancer.NewLoadBalancer(addrs, algo)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -43,10 +56,12 @@ func main() {
 		<-sigCh
 		fmt.Println("\nshutting down...")
 		_ = lb.Close()
+		os.Exit(0)
 	}()
 
 	fmt.Printf("load balancer listening on %s (algo=%s, backends=%d)\n",
 		lb.Addr(), *algoFlag, *servers)
+
 	lb.AcceptConnections()
 }
 

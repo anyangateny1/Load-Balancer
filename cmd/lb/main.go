@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -18,6 +19,10 @@ const (
 )
 
 func main() {
+	logger := slog.Default()
+
+	fmt.Println(os.Args)
+
 	algoFlag := flag.String("algo", DEFAULT_LOADBALANCER_BACKEND_SELECTOR, "load balancing algorithm (roundrobin, random)")
 	servers := flag.Int("servers", DEFAULT_NUMBER_OF_SERVERS, "number of backend servers")
 	flag.Parse()

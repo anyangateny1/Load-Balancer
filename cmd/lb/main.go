@@ -15,17 +15,15 @@ import (
 )
 
 const (
-	DEFAULT_NUMBER_OF_SERVERS             int    = 3
-	DEFAULT_LOADBALANCER_BACKEND_SELECTOR string = "roundrobin"
+	defaultNumServers = 3
+	defaultAlgo       = "roundrobin"
 )
 
 func main() {
 	logger := slog.Default()
 
-	fmt.Println(os.Args)
-
-	algoFlag := flag.String("algo", DEFAULT_LOADBALANCER_BACKEND_SELECTOR, "load balancing algorithm (roundrobin, random)")
-	servers := flag.Int("servers", DEFAULT_NUMBER_OF_SERVERS, "number of backend servers")
+	algoFlag := flag.String("algo", defaultAlgo, "load balancing algorithm (roundrobin, random)")
+	serversFlag := flag.Int("servers", defaultNumServers, "number of backend servers")
 	flag.Parse()
 
 	algo, err := parseAlgorithm(*algoFlag)
@@ -34,14 +32,15 @@ func main() {
 	}
 
 	var addrs []loadbalancer.Backend
+	var backends []*backendserver.BackendServer
 
-	for i := 0; i < *servers; i++ {
+	for i := 0; i < *serversFlag; i++ {
 		srv := backendserver.NewBackendServer(logger)
 		if err := srv.StartListening(); err != nil {
 			log.Fatalf("failed to start backend server %d: %v", i, err)
 		}
-		defer func() { _ = srv.Close() }()
 
+		backends = append(backends, srv)
 		addrs = append(addrs, srv.Addr())
 	}
 
@@ -55,12 +54,16 @@ func main() {
 	go func() {
 		<-sigCh
 		fmt.Println("\nshutting down...")
+
 		_ = lb.Close()
-		os.Exit(0)
+
+		for _, srv := range backends {
+			_ = srv.Close()
+		}
 	}()
 
 	fmt.Printf("load balancer listening on %s (algo=%s, backends=%d)\n",
-		lb.Addr(), *algoFlag, *servers)
+		lb.Addr(), *algoFlag, *serversFlag)
 
 	lb.AcceptConnections()
 }
